@@ -208,14 +208,13 @@ When information is unavailable, the tool response must state that explicitly.
 ```
 app/
   main.py                        # FastAPI app factory, lifespan hooks
+  config.py                      # Settings
+  session_state.py               # Per-session slot/state schema
+  versions.py                    # Version constants: prompt, tools, pipeline
   api/
     routes/
       voice.py                   # WebSocket /v1/voice
       health.py                  # GET /health, GET /ready
-  core/
-    config.py                    # Settings (extends existing)
-    session_state.py             # Per-session slot/state schema
-    versions.py                  # Version constants: prompt, tools, pipeline
   schemas/
     provider.py                  # ProviderRecord, GroundedFacility, DeepResearchResult
     session.py                   # SessionState, SlotCollection, ToolCallRecord
@@ -266,7 +265,7 @@ alembic/
 
 ## config.py Extensions
 
-Add to `Settings` in `app/core/config.py`:
+Add to `Settings` in `app/config.py`:
 
 ```python
 # Gemini Live
