@@ -79,9 +79,13 @@ Do not introduce a new framework or infrastructure service unless it solves a de
 
 ```
 Client (PCM audio, 16kHz)
-        │ WebSocket binary frames
+        │ WebSocket binary frames (base64 encoded)
         ▼
-FastAPI WebSocket  /v1/voice
+FastAPI WebSocket  /v1/voice  (app/api/routes/voice.py)
+  - Thin handler — owns connection lifecycle only
+  - Two concurrent tasks:
+      client_to_agent()  → receives audio frames from browser → forwards to session manager
+      agent_to_client()  → receives model audio events → sends PCM back to browser
         │
         ▼
 GeminiSessionManager  (app/voice/session_manager.py)
@@ -94,11 +98,11 @@ GeminiSessionManager  (app/voice/session_manager.py)
         │ BidiGenerateContentToolCall
         ▼
 ToolRouter  (app/voice/tool_router.py)
-  ┌─────────────────────────────────────────┐
-  │ search_providers    → PostgreSQL        │
-  │ get_facility_detail → PostgreSQL        │
-  │ deep_research       → Deep Agent        │
-  └─────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────────────────┐
+  │ search_providers    → PostgreSQL (blocking, fast)        │
+  │ get_facility_detail → PostgreSQL (blocking, fast)        │
+  │ deep_research       → Deep Agent (NON_BLOCKING, async)   │
+  └──────────────────────────────────────────────────────────┘
         │ DeepResearchRequest
         ▼
 Deep Agent  (app/agent/deep_agent.py)
@@ -107,7 +111,7 @@ Deep Agent  (app/agent/deep_agent.py)
     search_providers     → PostgreSQL
     get_quality_metrics  → PostgreSQL
   Returns: DeepResearchResult (Pydantic)
-        │ FunctionResponse JSON
+        │ FunctionResponse JSON  (sent via session.send_tool_response, scheduling=INTERRUPT)
         ▼
 GeminiSessionManager → session.send_tool_response(...)
         │ PCM audio (24kHz)
@@ -152,6 +156,38 @@ Avoid:
 - Session limit: 15 minutes; use `ContextWindowCompressionConfig` (sliding window) for longer sessions
 - Reconnect: store `SessionResumptionUpdate.handle`; pass as `handle` on the next `connect()` call
 - Tool calls: sequential by default; use `behavior: NON_BLOCKING` only where explicitly needed and documented
+
+---
+
+## Non-Blocking Tool Pattern (deep_research)
+
+`deep_research` is the only NON_BLOCKING tool. It takes up to 60 seconds and must not freeze the voice session.
+
+**Pattern (informed by google-adk-realtime-deepagents-example):**
+
+1. `tool_router.py` receives the `deep_research` tool call from Gemini
+2. It immediately returns an acknowledgement response: `"Research has started and will take up to a minute"`
+   — this lets Gemini speak the acknowledgement to the user right away
+3. The actual LangGraph ReAct work runs in a background asyncio task
+4. When the Deep Agent completes, `session.send_tool_response(...)` is called with the result
+5. Use `scheduling=INTERRUPT` on the FunctionResponse so Gemini immediately narrates findings
+
+**What this means for `tool_router.py`:**
+
+```python
+# Pseudocode — do not implement until reaching this step
+async def handle_deep_research(call_id, args, session):
+    # 1. Acknowledge immediately
+    await session.send_tool_response(call_id, {"status": "Research has started..."})
+    # 2. Run in background
+    asyncio.create_task(_run_and_deliver(call_id, args, session))
+
+async def _run_and_deliver(call_id, args, session):
+    result = await deep_agent.run(args)
+    await session.send_tool_response(call_id, result, scheduling="INTERRUPT")
+```
+
+`search_providers` and `get_facility_detail` are fast PostgreSQL queries — they remain blocking (default sequential behavior).
 
 ---
 
