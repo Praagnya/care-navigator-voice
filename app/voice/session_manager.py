@@ -2,16 +2,14 @@ import asyncio
 from fastapi import WebSocket
 from google import genai
 from google.genai import types
-import os
-import dotenv
+from app.config import get_settings
 
-dotenv.load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL")
+# config from app config
+MODEL = get_settings().gemini_model
+API_KEY = get_settings().gemini_api_key
 
-MODEL = "gemini-2.5-flash"  # TODO: Make this configurable from app config
-client = genai.Client()
+client = genai.Client(api_key=API_KEY)
 
 class GeminiSessionManager:
     def __init__(self, websocket: WebSocket):
@@ -39,14 +37,23 @@ class GeminiSessionManager:
     async def _send_audio_loop(self):
         while True:
             audio_data = await self.audio_in_queue.get()
-            await self.session.send_realtime_input(audio = types.Blob(mime_type="audio/pcm;",data=audio_data))
+            await self.session.send_realtime_input(audio = types.Blob(mime_type="audio/pcm;rate=16000",data=audio_data))
 
     async def _receive_loop(self):
-        while True:
-            response = await self.session.receive_audio()
-            await self.audio_out_queue.put(response)
+        async for response in self.session.receive():
+            server_content = response.server_content
+            if server_content and server_content.model_turn:
+                for part in server_content.model_turn.parts:
+                    if part.text:
+                        await self.websocket.send_text(part.text)
+                    elif part.inline_data:
+                        # add to queue
+                        await self.audio_out_queue.put(part.inline_data.data)
+                        print("Received audio data")
 
     async def _send_audio_out_loop(self):
         while True:
             audio_data = await self.audio_out_queue.get()
-            await self.websocket.send_audio(audio_data)
+            await self.websocket.send_bytes(audio_data)
+
+        
