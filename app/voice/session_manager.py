@@ -1,8 +1,9 @@
 import asyncio
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import types
 from app.config import get_settings
+
 
 
 # config from app config
@@ -20,7 +21,7 @@ class GeminiSessionManager:
     
     async def run(self): 
         config = types.LiveConnectConfig(
-            response_modalities=[types.ResponseModalities.AUDIO],
+            response_modalities=[types.Modality.AUDIO],
             system_instruction=types.Content(
                 parts=[types.Part(text="You are a helpful, brief AI assistant.")]
             ),
@@ -53,7 +54,10 @@ class GeminiSessionManager:
 
     async def _send_audio_out_loop(self):
         while True:
-            audio_data = await self.audio_out_queue.get()
-            await self.websocket.send_bytes(audio_data)
+            try:
+                audio_data = await self.audio_out_queue.get()
+                await self.websocket.send_bytes(audio_data)
+            except WebSocketDisconnect:
+                break
 
         
