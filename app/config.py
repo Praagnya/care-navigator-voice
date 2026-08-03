@@ -95,7 +95,6 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         return self.app_env == Environment.DEVELOPMENT
 
-
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
