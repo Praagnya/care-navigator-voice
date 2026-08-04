@@ -3,7 +3,8 @@ from fastapi import WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import types
 from app.config import get_settings
-
+from app.voice.tool_declarations import TOOL_DECLARATIONS
+from app.voice.tool_router import route_tool_call
 
 
 # config from app config
@@ -22,6 +23,7 @@ class GeminiSessionManager:
     async def run(self): 
         config = types.LiveConnectConfig(
             response_modalities=[types.Modality.AUDIO],
+            tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
             system_instruction=types.Content(
                 parts=[types.Part(text="You are a helpful, brief AI assistant.")]
             ),
@@ -51,6 +53,8 @@ class GeminiSessionManager:
                         # add to queue
                         await self.audio_out_queue.put(part.inline_data.data)
                         print("Received audio data")
+            if response.tool_call: 
+                await route_tool_call(response.tool_call, self.session) # route tool call to tool router
 
     async def _send_audio_out_loop(self):
         while True:
