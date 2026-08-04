@@ -22,10 +22,15 @@ class GeminiSessionManager:
     
     async def run(self): 
         config = types.LiveConnectConfig(
-            response_modalities=[types.Modality.AUDIO],
+            response_modalities=["AUDIO"],
             tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
             system_instruction=types.Content(
                 parts=[types.Part(text="You are a helpful, brief AI assistant.")]
+            ),
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name="Puck")
+                )
             ),
         )
 
@@ -43,18 +48,20 @@ class GeminiSessionManager:
             await self.session.send_realtime_input(audio = types.Blob(mime_type="audio/pcm;rate=16000",data=audio_data))
 
     async def _receive_loop(self):
-        async for response in self.session.receive():
-            server_content = response.server_content
-            if server_content and server_content.model_turn:
-                for part in server_content.model_turn.parts:
-                    if part.text:
-                        await self.websocket.send_text(part.text)
-                    elif part.inline_data:
-                        # add to queue
-                        await self.audio_out_queue.put(part.inline_data.data)
-                        print("Received audio data")
-            if response.tool_call: 
-                await route_tool_call(response.tool_call, self.session) # route tool call to tool router
+        while True:
+            async for response in self.session.receive():
+                server_content = response.server_content
+                if server_content and server_content.model_turn:
+                    for part in server_content.model_turn.parts:
+                        if part.text:
+                            await self.websocket.send_text(part.text)
+                        elif part.inline_data:
+                            await self.audio_out_queue.put(part.inline_data.data)
+                if server_content and server_content.turn_complete:
+                    while not self.audio_in_queue.empty():
+                        self.audio_in_queue.get_nowait()
+                if response.tool_call:
+                    await route_tool_call(response.tool_call, self.session)
 
     async def _send_audio_out_loop(self):
         while True:

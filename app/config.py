@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # Anthropic — required when deep_agent_llm_provider = "anthropic"
     anthropic_api_key: str = ""
 
+    # Tavily
+    tavily_api_key: str = ""
+    
     # Session behaviour
     session_resumption_enabled: bool = True
     context_window_compression_enabled: bool = True
