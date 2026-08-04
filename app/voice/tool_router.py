@@ -8,6 +8,7 @@ tavily = TavilyClient(api_key=TAVILY_API_KEY)
 
 async def route_tool_call(tool_call, session):
     for fn in tool_call.function_calls:
+        print(f"Routing tool call: {fn.name}")
         if fn.name == "deep_research":
             await handle_deep_research(fn.id, fn.args, session)
 
@@ -23,11 +24,9 @@ async def handle_deep_research(call_id, args, session):
     asyncio.create_task(_run_and_deliver(call_id, args, session))
 
 
-
-
 async def _run_and_deliver(call_id, args, session):
     # run tavily search
-    results = await asyncio.get_event_loop().run_in_executor(None, tavily.search, args["query"])
+    results = await asyncio.to_thread(tavily.search, args["query"])
     await session.send_tool_response(
         function_responses=[types.FunctionResponse(
             id=call_id,

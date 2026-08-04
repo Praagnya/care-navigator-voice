@@ -25,7 +25,7 @@ class GeminiSessionManager:
             response_modalities=["AUDIO"],
             tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
             system_instruction=types.Content(
-                parts=[types.Part(text="You are a helpful, brief AI assistant.")]
+                parts=[types.Part(text="You are a helpful, brief AI assistant who only talks about healthcare and hospitals.")]
             ),
             speech_config=types.SpeechConfig(
                 voice_config=types.VoiceConfig(
@@ -57,9 +57,14 @@ class GeminiSessionManager:
                             await self.websocket.send_text(part.text)
                         elif part.inline_data:
                             await self.audio_out_queue.put(part.inline_data.data)
+                if server_content and server_content.interrupted:
+                    await self.websocket.send_text("__interrupted__")
+                    while not self.audio_out_queue.empty():
+                        self.audio_out_queue.get_nowait()
                 if server_content and server_content.turn_complete:
                     while not self.audio_in_queue.empty():
                         self.audio_in_queue.get_nowait()
+                    await self.websocket.send_text("__turn_complete__")
                 if response.tool_call:
                     await route_tool_call(response.tool_call, self.session)
 
