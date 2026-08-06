@@ -39,7 +39,7 @@ The voice interface is the core product. Gemini Live handles conversation orches
 ### Out of V1
 
 - Text `/v1/chat` endpoint
-- Web search for facilities
+- Web search for facility facts (address, phone, services, insurance)
 - Appointment booking
 - Insurance-network filtering
 - Multilingual support
@@ -110,6 +110,7 @@ Deep Agent  (app/agent/deep_agent.py)
   Tools:
     search_providers     → PostgreSQL
     get_quality_metrics  → PostgreSQL
+    internet_search      → web search (reviews/reputation context only)
   Returns: DeepResearchResult (Pydantic)
         │ FunctionResponse JSON  (sent via session.send_tool_response, scheduling=INTERRUPT)
         ▼
@@ -226,6 +227,8 @@ Every `GroundedFacility` returned to Gemini as a tool response must include:
 - Explicit disclosure of any field that is absent or unverified
 
 `app/services/grounding.py` must validate every tool response before it is sent back to Gemini via `session.send_tool_response(...)`.
+
+`internet_search` is available to the Deep Agent for supplementary context (reviews, reputation) only. It must never be used to source facility facts — address, phone, services, insurance, and availability must always come from PostgreSQL.
 
 The grounding validator must reject responses that:
 

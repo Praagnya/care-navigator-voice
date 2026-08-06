@@ -27,6 +27,8 @@ dependencies = [
     # Observability
     "structlog>=24.4.0",
     "google-genai>=2.16.0",
+    "deepagents>=0.7.1",
+    "tavily>=1.1.0",
 ]
 
 [project.optional-dependencies]
