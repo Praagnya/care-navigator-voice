@@ -19,4 +19,4 @@ app = FastAPI(
 
 app.include_router(health_router, tags=["health"])
 app.include_router(voice_router, tags=["voice"])
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
