@@ -75,5 +75,3 @@ class GeminiSessionManager:
                 await self.websocket.send_bytes(audio_data)
             except WebSocketDisconnect:
                 break
-
-        
